@@ -223,13 +223,36 @@ class UserRegisterAPI(APIView):
             return self.error("Invalid captcha")
         if User.objects.filter(username=data["username"]).exists():
             return self.error("Username already exists")
+        if not data["email"].endswith("@shanghaitech.edu.cn"):
+            return self.error("Email not in shanghaitech")
         if User.objects.filter(email=data["email"]).exists():
             return self.error("Email already exists")
         user = User.objects.create(username=data["username"], email=data["email"])
+        data["password"] = rand_str()
         user.set_password(data["password"])
         user.save()
         UserProfile.objects.create(user=user)
-        return self.success("Succeeded")
+
+
+
+        user.reset_password_token = rand_str()
+        user.reset_password_token_expire_time = now() + timedelta(minutes=20)
+        user.save()
+        render_data = {
+            "username": user.username,
+            "website_name": SysOptions.website_name,
+            "link": f"{SysOptions.website_base_url}/reset-password/{user.reset_password_token}"
+        }
+        email_html = render_to_string("reset_password_email.html", render_data)
+        send_email_async.send(from_name=SysOptions.website_name_shortcut,
+                              to_email=user.email,
+                              to_name=user.username,
+                              subject=f"Reset your password",
+                              content=email_html)
+
+
+
+        return self.success("Succeeded, 但是请找回密码:)")
 
 
 class UserChangeEmailAPI(APIView):
